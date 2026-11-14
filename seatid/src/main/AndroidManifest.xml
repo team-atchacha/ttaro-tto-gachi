@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- ① 알아보기에 쓰는 SDK 권한 -->
+    <uses-permission android:name="pleos.car.permission.CAR_SEATS" />
+    <uses-permission android:name="pleos.car.permission.CAR_DOORS" />
+    <uses-permission android:name="pleos.car.permission.CAR_SAFETY" />
+    <!-- 경고등(조수석 에어백 OFF) 구독 -->
+    <uses-permission android:name="pleos.car.permission.PRIVATE_CAR_SAFETY" />
+    <!-- 웹 조작판 서버(8090)와 Virtual Console(8088) 호출 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <uses-feature android:name="android.hardware.type.automotive" android:required="true" />
+
+    <application
+        android:label="탑승자 인식 데모"
+        android:usesCleartextTraffic="true"
+        android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

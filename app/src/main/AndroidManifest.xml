@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 일반(normal) 권한: 조회 -->
+    <uses-permission android:name="pleos.car.permission.CAR_SAFETY" />
+    <uses-permission android:name="pleos.car.permission.CAR_SEATS" />
+    <uses-permission android:name="pleos.car.permission.CAR_DOORS" />
+    <uses-permission android:name="pleos.car.permission.CAR_LIGHTS" />
+    <!-- 일반(normal) 권한: 제어 -->
+    <uses-permission android:name="pleos.car.permission.CONTROL_CAR_SEATS" />
+    <uses-permission android:name="pleos.car.permission.CONTROL_CAR_LIGHTS" />
+    <!-- 서명(signature|privileged) 권한: 경고등 구독 — 실제로 부여되는지가 이 테스트의 핵심 -->
+    <uses-permission android:name="pleos.car.permission.PRIVATE_CAR_SAFETY" />
+
+    <uses-feature android:name="android.hardware.type.automotive" android:required="true" />
+
+    <application
+        android:label="Pleos Probe"
+        android:theme="@android:style/Theme.DeviceDefault">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

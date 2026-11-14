@@ -1,0 +1,9 @@
+_downloads/
+_tools/
+_gradle-home/
+.gradle/
+build/
+app/build/
+local.properties
+secrets.properties
+*.apk

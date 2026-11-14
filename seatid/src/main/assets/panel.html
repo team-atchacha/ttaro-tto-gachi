@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>탑승자 인식 조작판</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --line: #e3e6eb; --fg: #111827; --muted: #6b7280;
+    --sdk: #2563eb; --sdk-bg: #eff6ff; --sim: #b45309; --sim-bg: #fffbeb; --ok: #15803d; --warn: #dc2626;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0b0f17; --panel: #111827; --line: #263042; --fg: #f3f4f6; --muted: #9ca3af;
+      --sdk: #60a5fa; --sdk-bg: #0f1d33; --sim: #fbbf24; --sim-bg: #2a1f08; --ok: #4ade80; --warn: #f87171; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif; }
+  main { max-width: 1280px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 22px; margin: 0; }
+  h2 { font-size: 15px; margin: 0 0 10px; color: var(--muted); font-weight: 600; }
+  .sub { color: var(--muted); margin: 4px 0 0; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+  section { margin-top: 18px; }
+  button { font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--fg); border-radius: 9px; padding: 7px 12px; cursor: pointer; }
+  button:hover { border-color: var(--muted); }
+  button.sdk { border-color: var(--sdk); color: var(--sdk); background: var(--sdk-bg); }
+  button.sim { border-color: var(--sim); color: var(--sim); background: var(--sim-bg); }
+  button.on { font-weight: 700; box-shadow: inset 0 0 0 2px currentColor; }
+  button.scn { font-weight: 600; }
+  button:disabled { opacity: .5; cursor: wait; }
+  .tag { font-size: 12px; padding: 1px 7px; border-radius: 99px; font-weight: 600; }
+  .tag.sdk { color: var(--sdk); background: var(--sdk-bg); }
+  .tag.sim { color: var(--sim); background: var(--sim-bg); }
+  .who { font-size: 26px; font-weight: 700; margin: 4px 0 2px; }
+  .muted { color: var(--muted); }
+  .warn { color: var(--warn); font-weight: 600; }
+  .ctl { display: grid; grid-template-columns: 64px 1fr; gap: 6px 10px; align-items: center; margin-top: 12px; }
+  .ctl > span { color: var(--muted); font-size: 13px; }
+  input[type=number] { width: 64px; font: inherit; padding: 5px 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--fg); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; }
+  pre { margin: 0; white-space: pre-wrap; font: 13px/1.6 ui-monospace, Consolas, monospace; max-height: 340px; overflow: auto; }
+  .status { font-size: 13px; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-top: 10px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>탑승자 인식 조작판 <span class="muted" style="font-weight:400">· ① 알아보기</span></h1>
+  <p class="sub">여기서 누르면 에뮬레이터 화면이 바뀝니다. 차 화면의 질문은 에뮬레이터에서 직접 눌러도 되고, 아래 "탑승자 응답"으로 대신 눌러도 됩니다.</p>
+  <div class="legend">
+    <span><span class="tag sdk">SDK</span> Virtual Console → 차량 속성 → Vehicle SDK 구독으로 앱에 전달 (실제 경로)</span>
+    <span><span class="tag sim">시뮬레이션</span> 에뮬레이터가 값을 못 줘서 앱에 직접 넣는 값 (실차에서는 SDK가 줌)</span>
+  </div>
+  <p class="status" id="conn">연결 중…</p>
+
+  <section class="card">
+    <h2>시나리오</h2>
+    <div class="row" id="scenarios"></div>
+    <p class="muted" style="margin:10px 0 0;font-size:13px" id="scnNote">순서대로 눌러 보면 "운전자 자동 인식 → 동승자 추천 확인 → 짐 구분 → 하차"가 이어집니다.</p>
+  </section>
+
+  <section>
+    <div class="grid" id="seats"></div>
+  </section>
+
+  <section class="card">
+    <h2>운전자 = 차 화면에 로그인된 차량 사용자 프로필 <span class="tag sdk">Android</span></h2>
+    <div class="who" id="driverName" style="font-size:22px"></div>
+    <p class="muted" style="margin:6px 0 0;font-size:13px">운전자를 바꾸려면 에뮬레이터 화면 맨 위의 프로필 아이콘(동그라미)을 눌러 아빠·엄마·운전자 중에서 고르고, 바뀐 프로필에서 "탑승자 인식 데모" 앱을 다시 여세요. 이 페이지는 몇 초 뒤 새 사용자의 앱에 다시 연결됩니다. 프로필마다 처음 한 번은 운전석에 앉을 때 누구인지 묻고, 그다음부터는 묻지 않습니다. (일반 앱은 프로필 이름을 읽을 수 없어서 주인을 한 번 정하는 방식입니다.)</p>
+  </section>
+
+  <section class="card">
+    <h2>조수석 무게 센서 <span class="tag sdk">SDK</span></h2>
+    <div class="row">
+      <button class="sdk" id="airbagOn">에어백 OFF 경고등 켜기 (아이가 앉음)</button>
+      <button class="sdk" id="airbagOff">경고등 끄기 (성인)</button>
+      <span class="muted" id="airbagState"></span>
+    </div>
+    <p class="muted" style="margin:8px 0 0;font-size:13px">SDK에 몸무게·압력 값은 없습니다. 실차의 조수석 무게 센서가 어린이를 감지하면 켜는 "조수석 에어백 OFF" 경고등을 신호로 씁니다.</p>
+  </section>
+
+  <section class="grid">
+    <div class="card">
+      <h2>가족 프로필 (앱에 저장된 값)</h2>
+      <table id="profiles"></table>
+    </div>
+    <div class="card">
+      <h2>판단 기록</h2>
+      <pre id="log"></pre>
+    </div>
+  </section>
+</main>
+
+<script>
+const SEATS = ["FL", "FR", "RL", "RR"];
+let state = null;
+let busy = false;
+
+const $ = (id) => document.getElementById(id);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function act(type, seat, extra = {}) {
+  const res = await fetch("/api/act", { method: "POST", body: JSON.stringify({ type, seat, ...extra }) });
+  const j = await res.json();
+  if (!j.ok) alert("실패: " + j.error);
+}
+const door = (s, v) => act("door", s, { value: v });
+const sit = (s, v) => act("sit", s, { value: v });
+const belt = (s, v) => act("belt", s, { value: v });
+
+async function board(s, { buckle = true } = {}) {
+  // 이미 누가 앉아 있으면 먼저 내리게 한다(시나리오를 어떤 순서로 눌러도 되게)
+  if (state?.seats.find((x) => x.pos === s)?.occupied) await alight(s);
+  await door(s, true); await sleep(700);
+  await sit(s, true); await sleep(900);
+  if (buckle) { await belt(s, true); await sleep(500); }
+  await door(s, false); await sleep(600);
+}
+async function alight(s) {
+  await door(s, true); await sleep(600);
+  await belt(s, false); await sit(s, false); await sleep(700);
+  await door(s, false); await sleep(400);
+}
+
+const SCENARIOS = [
+  ["1. 운전석 탑승", "차 화면에 로그인된 사용자 프로필로 묻지 않고 자동 인식", () => board("FL")],
+  ["2. 엄마 조수석 탑승", "조수석 기록(엄마 6회)으로 추천 → 화면에서 확인", () => board("FR")],
+  ["3. 아이 둘 뒷좌석", "자리별 평소 기록으로 각각 추천", async () => { await board("RL"); await board("RR"); }],
+  ["4. 뒷좌석에 가방", "앉았는데 벨트를 안 매면 8초 뒤 '짐일 수 있음'", () => board("RR", { buckle: false })],
+  ["5. 아이가 조수석 (에어백 OFF)", "무게 센서 신호로 어린이 중에서 추천", async () => { await act("airbag", null, { value: true }); await sleep(600); await board("FR"); }],
+  ["전원 하차", "모든 자리 비우고 자리 초기화", async () => { for (const s of SEATS) if (state?.seats.find((x) => x.pos === s)?.occupied) await alight(s); await act("airbag", null, { value: false }); }],
+  ["시연 초기화", "차량 상태를 비우고 가족 기록을 예시 데이터로 되돌림", async () => {
+    for (const s of SEATS) { await sit(s, false); await door(s, false); await belt(s, false); }
+    await act("airbag", null, { value: false }); await sleep(800); await act("reset");
+  }],
+];
+
+function renderScenarios() {
+  const box = $("scenarios");
+  SCENARIOS.forEach(([label, desc, fn]) => {
+    const b = document.createElement("button");
+    b.className = "scn"; b.textContent = label; b.title = desc;
+    b.onmouseenter = () => ($("scnNote").textContent = desc);
+    b.onclick = async () => {
+      if (busy) return;
+      busy = true; document.querySelectorAll("button.scn").forEach((x) => (x.disabled = true));
+      try { await fn(); } finally { busy = false; document.querySelectorAll("button.scn").forEach((x) => (x.disabled = false)); }
+    };
+    box.appendChild(b);
+  });
+}
+
+function btn(label, cls, on, onclick) {
+  return `<button class="${cls}${on ? " on" : ""}" data-act='${JSON.stringify(onclick)}'>${label}</button>`;
+}
+
+const STATUS_TEXT = { EMPTY: "빈자리", DETECTED: "착석 감지…", ASKING: "누구세요?", IDENTIFIED: "", OBJECT: "짐·물건" };
+
+function renderSeats() {
+  const box = $("seats");
+  box.innerHTML = state.seats.map((s) => {
+    const who = s.status === "IDENTIFIED" ? s.person : STATUS_TEXT[s.status];
+    const why = s.status === "IDENTIFIED" ? s.method
+      : s.status === "ASKING" ? (s.suggestionName ? `추천: ${s.suggestionName} (${s.suggestionReason})` : s.suggestionReason)
+      : s.method;
+    const taken = new Set(state.seats.filter((x) => x.pos !== s.pos && x.status === "IDENTIFIED").map((x) => x.person));
+    const answers = s.occupied
+      ? state.profiles.filter((p) => !taken.has(p.name)).map((p) => btn(p.name, "", false, { type: "choose", seat: s.pos, person: p.id })).join("")
+        + btn("손님", "", false, { type: "choose", seat: s.pos, person: "guest" })
+        + btn("짐이에요", "", false, { type: "choose", seat: s.pos, person: "object" })
+        + btn("다시 판단", "", false, { type: "reidentify", seat: s.pos })
+      : `<span class="muted">앉으면 응답할 수 있어요</span>`;
+    return `<div class="card">
+      <div class="row" style="justify-content:space-between"><strong>${s.label}</strong>
+        <span class="muted" style="font-size:13px">${s.doorOpen ? "문 열림 · " : ""}점유 ${s.occupied ? "●" : "○"} · 벨트 ${s.belt ? "✓ (" + s.beltSource + ")" : "—"}</span></div>
+      <div class="who">${who ?? "?"}</div>
+      <div class="muted" style="min-height:22px">${why ?? ""}</div>
+      ${s.beltWarn ? `<div class="warn">벨트 미착용 · 짐일 수 있어요</div>` : ""}
+      <div class="ctl">
+        <span>문 <span class="tag sdk">SDK</span></span><div class="row">${btn("열기", "sdk", s.doorOpen, { type: "door", seat: s.pos, value: true })}${btn("닫기", "sdk", !s.doorOpen, { type: "door", seat: s.pos, value: false })}</div>
+        <span>착석 <span class="tag sdk">SDK</span></span><div class="row">${btn("앉기", "sdk", s.occupied, { type: "sit", seat: s.pos, value: true })}${btn("일어나기", "sdk", !s.occupied, { type: "sit", seat: s.pos, value: false })}</div>
+        <span>벨트 <span class="tag sim">시뮬</span></span><div class="row">${btn("매기", "sim", s.belt, { type: "belt", seat: s.pos, value: true })}${btn("풀기", "sim", !s.belt, { type: "belt", seat: s.pos, value: false })}</div>
+        <span>탑승자 응답</span><div class="row">${answers}</div>
+      </div>
+    </div>`;
+  }).join("");
+  box.querySelectorAll("button[data-act]").forEach((b) => {
+    b.onclick = () => {
+      const a = JSON.parse(b.dataset.act);
+      const { type, seat, ...rest } = a;
+      act(type, seat, rest);
+    };
+  });
+}
+
+function renderRest() {
+  const d = state.driverUser;
+  $("driverName").innerHTML = `차량 프로필 ${d.label} 로그인 중 → ` + (d.profile ? `주인 <strong>${d.profile}</strong> · 운전석에 앉으면 자동 인식` : `<span class="warn">주인 미등록 · 처음 운전석에 앉을 때 한 번 물어보고 기억</span>`);
+  $("airbagState").textContent = state.airbagOff ? "현재: 에어백 OFF 켜짐 (어린이)" : "현재: 꺼짐";
+  const seatLabels = { FL: "운전석", FR: "조수석", RL: "뒤 왼쪽", RR: "뒤 오른쪽" };
+  $("profiles").innerHTML = `<tr><th>이름</th><th>구분</th><th>시트 자세(지문)</th><th>자리별 탑승 횟수</th></tr>` +
+    state.profiles.map((p) => `<tr><td><strong>${p.name}</strong></td><td>${p.role}</td><td>${p.fp ?? '<span class="muted">없음</span>'}</td>
+      <td>${Object.entries(p.history).filter(([, n]) => n > 0).map(([k, n]) => `${seatLabels[k]} ${n}`).join(" · ") || '<span class="muted">-</span>'}</td></tr>`).join("");
+  $("log").textContent = state.log.join("\n");
+  $("conn").innerHTML = state.consoleError
+    ? `<span class="warn">Virtual Console 연결 문제: ${state.consoleError}</span>`
+    : `<span style="color:var(--ok)">● 앱 연결됨 · Virtual Console 연결됨</span>`;
+}
+
+let lastSeatsJson = "";
+async function poll() {
+  try {
+    const r = await fetch("/api/state", { cache: "no-store" });
+    state = await r.json();
+    const seatsJson = JSON.stringify([state.seats, state.profiles.map((p) => p.id)]);
+    if (seatsJson !== lastSeatsJson) { lastSeatsJson = seatsJson; renderSeats(); }
+    renderRest();
+  } catch (e) {
+    $("conn").innerHTML = `<span class="warn">앱에 연결할 수 없음 — 사용자 프로필을 바꿨다면 에뮬레이터에서 "탑승자 인식 데모" 앱을 다시 여세요. 그래도 안 되면 adb forward tcp:8090 tcp:8090</span>`;
+  }
+  setTimeout(poll, 700);
+}
+
+renderScenarios();
+$("airbagOn").onclick = () => act("airbag", null, { value: true });
+$("airbagOff").onclick = () => act("airbag", null, { value: false });
+poll();
+</script>
+</body>
+</html>

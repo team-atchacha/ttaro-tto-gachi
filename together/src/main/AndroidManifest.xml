@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 읽기: 알아보기(좌석·문·벨트), 상황 판단(기어), 설비 현재값 -->
+    <uses-permission android:name="pleos.car.permission.CAR_SEATS" />
+    <uses-permission android:name="pleos.car.permission.CAR_DOORS" />
+    <uses-permission android:name="pleos.car.permission.CAR_DRIVE" />
+    <uses-permission android:name="pleos.car.permission.CAR_LIGHTS" />
+    <uses-permission android:name="pleos.car.permission.CAR_CLIMATE" />
+    <!-- 경고등(조수석 에어백 OFF) -->
+    <uses-permission android:name="pleos.car.permission.CAR_SAFETY" />
+    <uses-permission android:name="pleos.car.permission.PRIVATE_CAR_SAFETY" />
+    <!-- 제어: 자리별 맞춤과 공유 설비 조율 -->
+    <uses-permission android:name="pleos.car.permission.CONTROL_CAR_SEATS" />
+    <uses-permission android:name="pleos.car.permission.CONTROL_CAR_LIGHTS" />
+    <uses-permission android:name="pleos.car.permission.CONTROL_CAR_CLIMATE" />
+    <!-- 내비: 경로 안내·남은 시간 -->
+    <uses-permission android:name="pleos.car.permission.NAVI_ROUTE" />
+    <uses-permission android:name="pleos.car.permission.NAVI_ROUTE_SEARCH" />
+    <!-- 주행 제한 상태 -->
+    <uses-permission android:name="android.car.permission.CAR_UX_RESTRICTIONS_CONFIGURATION" />
+    <!-- 시연용: 웹 조작판 서버(8090)와 Virtual Console(8088) 호출 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 앱이 뒤로 가도(내비가 앞에 떠도) 판단을 계속하도록 포그라운드 서비스로 돈다 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <uses-feature android:name="android.hardware.type.automotive" android:required="true" />
+
+    <application
+        android:label="따로 또 같이"
+        android:usesCleartextTraffic="true"
+        android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+        <uses-library android:name="android.car" android:required="false" />
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask">
+            <!-- 주행 중에도 화면을 띄우려면 운전 방해 최소화(DO) 앱으로 선언해야 한다.
+                 대신 주행 중 운전자용 조작은 끄기 버튼 하나로 제한한다. -->
+            <meta-data android:name="distractionOptimized" android:value="true" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <service
+            android:name=".DemoService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="탑승자별 차량 설비 조율을 주행 내내 유지" />
+        </service>
+    </application>
+</manifest>

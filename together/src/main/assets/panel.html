@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>따로 또 같이 조작판</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --panel: #ffffff; --line: #e2e5ea; --fg: #111827; --muted: #6b7280; --soft: #f3f4f6;
+    --sdk: #2563eb; --sdk-bg: #eff6ff; --navi: #0f766e; --navi-bg: #ecfdf5; --sim: #b45309; --sim-bg: #fffbeb;
+    --user: #7c3aed; --user-bg: #f5f3ff; --ok: #15803d; --warn: #dc2626; --accent: #111827;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0b0f17; --panel: #111827; --line: #263042; --fg: #f3f4f6; --muted: #9ca3af; --soft: #172033;
+      --sdk: #60a5fa; --sdk-bg: #0f1d33; --navi: #5eead4; --navi-bg: #0b2622; --sim: #fbbf24; --sim-bg: #2a1f08;
+      --user: #c4b5fd; --user-bg: #1e1636; --ok: #4ade80; --warn: #f87171; --accent: #f3f4f6; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif; }
+  main { max-width: 1400px; margin: 0 auto; padding: 20px 16px 48px; }
+  header { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
+  h2 { font-size: 13px; margin: 0 0 10px; color: var(--muted); font-weight: 700; letter-spacing: .02em; }
+  .sub { color: var(--muted); margin: 2px 0 0; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  section { margin-top: 14px; }
+  .cols { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr) 380px; }
+  @media (max-width: 1100px) { .cols { grid-template-columns: 1fr; } }
+  .seats { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (max-width: 760px) { .seats { grid-template-columns: 1fr; } }
+  button { font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--fg); border-radius: 9px; padding: 6px 11px; cursor: pointer; }
+  button:hover { border-color: var(--muted); }
+  button.sdk { border-color: var(--sdk); color: var(--sdk); background: var(--sdk-bg); }
+  button.navi { border-color: var(--navi); color: var(--navi); background: var(--navi-bg); }
+  button.sim { border-color: var(--sim); color: var(--sim); background: var(--sim-bg); }
+  button.user { border-color: var(--user); color: var(--user); background: var(--user-bg); }
+  button.on { font-weight: 700; box-shadow: inset 0 0 0 2px currentColor; }
+  button:disabled { opacity: .45; cursor: default; }
+  .tag { font-size: 11px; padding: 1px 7px; border-radius: 99px; font-weight: 700; white-space: nowrap; }
+  .tag.sdk { color: var(--sdk); background: var(--sdk-bg); }
+  .tag.navi { color: var(--navi); background: var(--navi-bg); }
+  .tag.sim { color: var(--sim); background: var(--sim-bg); }
+  .tag.user { color: var(--user); background: var(--user-bg); }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .muted { color: var(--muted); } .warn { color: var(--warn); font-weight: 600; } .ok { color: var(--ok); }
+  .steps { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+  .step { text-align: left; padding: 10px 12px; border-radius: 12px; }
+  .step b { display: block; font-size: 14px; }
+  .step span { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .step.done { opacity: .55; }
+  .step.next { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .who { font-size: 24px; font-weight: 800; margin: 2px 0 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .mode { font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 99px; color: #fff; }
+  .pending { margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: var(--user-bg); color: var(--user); font-weight: 600; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .ctl { display: grid; grid-template-columns: 64px 1fr; gap: 6px 8px; align-items: center; margin-top: 10px; }
+  .ctl > span { color: var(--muted); font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 10px; }
+  th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  td.why { color: var(--muted); }
+  .st-VERIFIED { color: var(--ok); font-weight: 700; } .st-FAILED, .st-BLOCKED { color: var(--warn); font-weight: 700; } .st-PENDING, .st-DEFERRED { color: var(--sim); }
+  .trip { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+  .kv { background: var(--soft); border-radius: 10px; padding: 8px 10px; }
+  .kv small { display: block; color: var(--muted); font-size: 11.5px; }
+  .kv b { font-size: 17px; }
+  .notice { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: #f59e0b; color: #111; font-weight: 700; }
+  .swatch { width: 72px; height: 44px; border-radius: 10px; border: 1px solid var(--line); background: #1a1f2b; position: relative; overflow: hidden; flex: none; }
+  .swatch i { position: absolute; inset: 0; }
+  .dec { margin: 8px 0 0; padding-left: 0; list-style: none; }
+  .dec li { padding: 6px 0; border-top: 1px solid var(--line); }
+  .dec li small { display: block; color: var(--muted); }
+  pre { margin: 0; white-space: pre-wrap; font: 12px/1.6 ui-monospace, Consolas, monospace; max-height: 420px; overflow: auto; }
+  .status { font-size: 12px; margin: 6px 0 0; }
+  .console td:last-child { font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>따로 또 같이 <span class="muted" style="font-weight:500">· 시연 조작판</span></h1>
+      <p class="sub">여기서 누르면 에뮬레이터의 앱 화면과 차량 설비(Virtual Console)가 함께 바뀝니다.</p>
+    </div>
+    <p class="status" id="conn">연결 중…</p>
+  </header>
+  <div class="legend">
+    <span><span class="tag sdk">SDK</span> Virtual Console → 차량 속성 → Vehicle SDK로 앱에 전달</span>
+    <span><span class="tag navi">NaviHelper</span> 내장 내비게이션에 경로 요청·남은 시간 수신</span>
+    <span><span class="tag sim">시뮬레이션</span> 에뮬레이터가 못 주는 값(벨트·시간 경과)</span>
+    <span><span class="tag user">탑승자</span> 뒷자리 탑승자 대신 누르기(실차에서는 화면·음성)</span>
+  </div>
+
+  <section class="card">
+    <h2>시나리오 · 토요일 저녁, 나들이를 마치고 집으로</h2>
+    <div class="steps" id="steps"></div>
+    <p class="muted" style="margin:10px 0 0;font-size:12px">순서대로 누르세요. 질문은 에뮬레이터 화면에서 직접 눌러도 되고, 아래 좌석 카드에서 대신 눌러도 됩니다.</p>
+  </section>
+
+  <section class="card">
+    <h2>지금 상황 <span class="tag sdk">SDK</span> <span class="tag navi">NaviHelper</span></h2>
+    <div class="trip" id="trip"></div>
+    <div id="notice"></div>
+  </section>
+
+  <div class="cols">
+    <div>
+      <section><div class="seats" id="seats"></div></section>
+      <section class="card">
+        <h2>함께 쓰는 설비 · 조율 결과</h2>
+        <div class="row" style="gap:14px">
+          <div class="swatch"><i id="sw"></i></div>
+          <div><div class="muted" style="font-size:12px">앰비언트 조명 · 내·외기</div><div id="sharedNow" style="font-size:18px;font-weight:700"></div></div>
+        </div>
+        <ul class="dec" id="decisions"></ul>
+      </section>
+    </div>
+    <div>
+      <section class="card">
+        <h2>차량 신호</h2>
+        <div class="ctl">
+          <span>기어</span><div class="row"><button class="sdk" data-gear="Park">P</button><button class="sdk" data-gear="Drive">D</button><span class="tag sdk">SDK</span></div>
+          <span>경로</span><div class="row"><button class="navi" id="routeOn">집으로 안내 시작</button><button class="navi" id="routeOff">안내 종료</button></div>
+          <span>조수석</span><div class="row"><button class="sdk" id="airbagOn">에어백 OFF 켜기</button><button class="sdk" id="airbagOff">끄기</button></div>
+          <span>내·외기</span><div class="row"><button class="sdk" id="recircOn">내기로 (콘솔)</button><button class="sdk" id="recircOff">외기로</button></div>
+          <span>시간</span><div class="row"><button class="sim" id="night">야간</button><button class="sim" id="speed">30배속</button><button class="sim" data-jump="10">+10분</button><button class="sim" data-jump="20">+20분</button><button class="sim" data-jump="40">+40분</button><button class="sim" id="to15">도착 15분 전으로</button></div>
+        </div>
+        <p class="muted" style="font-size:12px;margin:10px 0 0">에뮬레이터는 실제로 달리지 않아 내비의 남은 시간이 줄지 않습니다. 시간 버튼은 앱의 주행 시계만 앞으로 돌립니다(실차에서는 필요 없음).</p>
+      </section>
+      <section class="card">
+        <h2>가족 설정</h2>
+        <div class="ctl">
+          <span>우선순위</span><div class="row"><button data-prio="safety">안전 우선</button><button data-prio="kids">아이 우선</button></div>
+          <span>운전 집중</span><div class="row"><button data-focus="60">연속 60분</button><button data-focus="120">연속 120분</button></div>
+        </div>
+        <p class="muted" style="font-size:12px;margin:8px 0 0" id="prioNote"></p>
+      </section>
+      <section class="card">
+        <h2>차량 실제 상태 <span class="tag sdk">Virtual Console</span></h2>
+        <table class="console"><tbody id="console"></tbody></table>
+        <p class="muted" style="font-size:12px;margin:8px 0 0">앱이 SDK로 보낸 명령이 실제 차량 속성에 반영된 값입니다.</p>
+      </section>
+      <section class="card">
+        <h2>판단 기록</h2>
+        <pre id="log"></pre>
+      </section>
+      <section><button id="reset" style="width:100%">시연 초기화 (전원 하차·P·안내 종료·설비 원래대로)</button></section>
+    </div>
+  </div>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+const SEATS = ['FL', 'FR', 'RL', 'RR'];
+const COLORS = { dad: '#3B82F6', mom: '#EC4899', jimin: '#F59E0B', junho: '#22C55E', guest: '#A78BFA' };
+const MODES = [['SLEEP', '☾ 수면'], ['VIDEO', '▶ 영상'], ['READ', '✎ 독서']];
+let S = null, busy = false, done = new Set();
+
+async function act(body) {
+  const r = await fetch('/api/act', { method: 'POST', body: JSON.stringify(body) });
+  const j = await r.json(); if (!j.ok) alert(j.error);
+}
+const wait = ms => new Promise(r => setTimeout(r, ms));
+async function run(list) {
+  if (busy) return; busy = true; render();
+  try { for (const x of list) { if (typeof x === 'number') await wait(x); else await act(x); } }
+  finally { busy = false; render(); }
+}
+
+const board = seat => [{ type: 'door', seat, value: true }, 300, { type: 'sit', seat, value: true }, 300, { type: 'belt', seat, value: true }];
+const alight = seat => [{ type: 'door', seat, value: true }, 300, { type: 'belt', seat, value: false }, { type: 'sit', seat, value: false }, 300];
+const closeAll = SEATS.map(seat => ({ type: 'door', seat, value: false }));
+
+const STEPS = [
+  { t: '1. 탑승', d: '네 문이 열리고 네 자리에 앉음 → 운전석은 로그인 프로필로 자동, 나머지는 탑승 기록으로 추천',
+    a: () => [{ type: 'night', value: true }, ...SEATS.flatMap(board), 600, ...closeAll] },
+  { t: '2. 확인 · 각자 모드', d: '"엄마·지민·준호 맞죠?" 확인 → 지난번처럼 지민은 독서, 준호는 영상 (출발 전에 맞춤)',
+    a: () => [{ type: 'confirmAll' }, 1500, { type: 'accept', seat: 'RL' }, 400, { type: 'accept', seat: 'RR' }] },
+  { t: '3. 출발', d: '집으로 경로 안내(NaviHelper) + 기어 D → 이제 운전자에게는 묻지 않음',
+    a: () => [{ type: 'route', value: true }, 2500, { type: 'gear', value: 'Drive' }] },
+  { t: '4. 엄마가 잠듦', d: '20분 뒤 앱이 엄마에게 수면을 제안 → 수락하면 조명이 어두워져도 지민 독서등은 유지',
+    a: () => [{ type: 'jump', value: 20 }, 1500, { type: 'accept', seat: 'FR' }] },
+  { t: '5. 아빠가 졸림', d: '연속 운전 60분 → 운전석만 통풍·온도 낮춤, 외기로. 엄마는 시트 온열 유지',
+    a: () => [{ type: 'jump', value: 40 }] },
+  { t: '6. 도착 전 깨우기', d: '남은 15분 → 30배속으로 조명을 서서히 밝힘, 알람 없이 깨움 → 도착하면 모드 종료',
+    a: () => [{ type: 'toRemain', value: 15 }, 500, { type: 'speed', value: 30 }] },
+  { t: '7. 하차', d: '기어 P, 문 열고 내림 → 자리별 설정을 원래대로',
+    a: () => [{ type: 'speed', value: 1 }, { type: 'gear', value: 'Park' }, { type: 'route', value: false }, 800, ...SEATS.flatMap(alight), 600, ...closeAll] },
+];
+const EXTRA = [
+  { t: '조수석에 아이', d: '에어백 OFF + 조수석 탑승 → 어린이 중에서 추천', a: () => [{ type: 'airbag', value: true }, ...board('FR'), 300, { type: 'door', seat: 'FR', value: false }] },
+  { t: '뒷자리에 가방', d: '앉았는데 벨트 없음 → 8초 뒤 "짐일 수 있음"', a: () => [{ type: 'door', seat: 'RR', value: true }, 300, { type: 'sit', seat: 'RR', value: true }, 300, { type: 'door', seat: 'RR', value: false }] },
+  { t: '뒷자리가 덥다', d: '시트 온열부터 낮추고, 그다음은 우선순위로 판단 (엄마가 자는 중이면 온도는 그대로)', a: () => [{ type: 'complain', seat: 'RL', hot: true }] },
+  { t: '우선순위 바꾸기', d: '안전 우선 ↔ 아이 우선 — 조명 색이 우선순위 높은 자리 쪽으로 바뀜', a: () => [{ type: 'priority', value: S && S.settings.priority === 'kids' ? 'safety' : 'kids' }] },
+];
+
+function stepsUI() {
+  const box = $('#steps'); box.innerHTML = '';
+  const next = STEPS.findIndex((_, i) => !done.has(i));
+  STEPS.forEach((s, i) => {
+    const b = document.createElement('button');
+    b.className = 'step' + (done.has(i) ? ' done' : '') + (i === next ? ' next' : '');
+    b.innerHTML = `<b>${s.t}</b><span>${s.d}</span>`;
+    b.disabled = busy;
+    b.onclick = async () => { await run(s.a()); done.add(i); stepsUI(); };
+    box.appendChild(b);
+  });
+  EXTRA.forEach(s => {
+    const b = document.createElement('button');
+    b.className = 'step'; b.style.borderStyle = 'dashed';
+    b.innerHTML = `<b>+ ${s.t}</b><span>${s.d}</span>`;
+    b.disabled = busy; b.onclick = () => run(s.a());
+    box.appendChild(b);
+  });
+}
+
+function kv(label, value) { return `<div class="kv"><small>${label}</small><b>${value}</b></div>`; }
+const fmtMin = m => m == null ? '-' : (m >= 60 ? `${Math.floor(m / 60)}시간 ${m % 60}분` : `${m}분`);
+
+function render() {
+  stepsUI();
+  if (!S) return;
+  const t = S.trip;
+  const r = t.route;
+  $('#trip').innerHTML = [
+    kv('기어', t.gear + (t.driving ? ' · 주행 중' : ' · 정차')),
+    kv('주행 제한', t.ux == null ? '-' : t.ux ? '제한 필요' : '제한 없음'),
+    kv('경로', r ? `${r.name} (${r.source.startsWith('NaviHelper') ? '내비' : '시연용'})` : '없음'),
+    kv('남은 시간', r ? (r.arrived ? '도착' : fmtMin(t.remainMin)) : '-'),
+    kv('연속 운전', fmtMin(t.driveMin)),
+    kv('시간', (t.night ? '야간' : '주간') + (t.speed > 1 ? ` · ${t.speed}배속` : '')),
+    kv('운전석 프로필', `${S.driverUser.label} → ${S.driverUser.profile ?? '주인 미등록'}`),
+  ].join('');
+  $('#notice').innerHTML = S.notice ? `<div class="notice">차 화면 알림: ${S.notice}</div>` : '';
+
+  const dev = id => S.devices.find(d => d.id === id);
+  const seatBox = $('#seats'); seatBox.innerHTML = '';
+  S.seats.forEach(s => {
+    const el = document.createElement('div'); el.className = 'card';
+    const color = COLORS[s.personId] || '#9ca3af';
+    let who = s.status === 'EMPTY' ? '<span class="muted">빈자리</span>'
+      : s.status === 'ASKING' ? `<span class="warn">누구세요?</span> <span class="muted" style="font-size:13px;font-weight:500">${s.suggestionName ? '추천 ' + s.suggestionName + ' · ' : ''}${s.suggestionReason}</span>`
+      : s.status === 'OBJECT' ? '<span class="muted">짐·물건</span>'
+      : s.status === 'DETECTED' ? '착석 감지…' : `<span style="color:${color}">${s.person}</span>`;
+    if (s.status === 'IDENTIFIED' && s.mode !== 'NONE') who += `<span class="mode" style="background:${color}">${s.modeLabel} · ${s.modeSource}</span>`;
+    const rows = S.devices.filter(d => d.seat === s.pos).map(d =>
+      `<tr><td>${d.label.replace(s.label + ' ', '')}</td><td>${d.actual}</td><td class="st-${d.state}">${d.target ? '→ ' + d.target : ''} ${d.state === 'VERIFIED' && d.target ? '✓' : d.state === 'PENDING' ? '…' : d.state === 'FAILED' ? '✕' : d.state === 'DEFERRED' ? '⏸ 정차 시' : ''}</td><td class="why">${d.why ?? (d.message || '')}</td></tr>`).join('');
+    const people = S.profiles.map(p => `<button class="user" data-choose="${s.pos}:${p.id}" ${!s.occupied ? 'disabled' : ''}>${p.name}</button>`).join('');
+    const modes = MODES.map(([m, l]) => `<button class="user ${s.mode === m ? 'on' : ''}" data-mode="${s.pos}:${s.mode === m ? 'NONE' : m}" ${s.status !== 'IDENTIFIED' || s.pos === 'FL' ? 'disabled' : ''}>${l}</button>`).join('');
+    el.innerHTML = `
+      <div class="row" style="justify-content:space-between"><b class="muted">${s.label}</b>
+        <span class="muted" style="font-size:12px">${s.doorOpen ? '<span class="warn">문 열림</span> · ' : ''}점유 ${s.occupied ? '●' : '○'} · 벨트 ${s.belt ? '✓' : '—'}${s.beltWarn ? ' · <span class="warn">짐일 수 있음</span>' : ''}</span></div>
+      <div class="who">${who}</div>
+      <div class="muted" style="font-size:12px">${s.method || ''}</div>
+      ${s.pending ? `<div class="pending">먼저 묻기: ${s.pending.title} <span style="font-weight:400">(${s.pending.reason})</span>
+          <button class="user" data-accept="${s.pos}">네</button><button data-decline="${s.pos}">괜찮아요</button></div>` : ''}
+      <table><thead><tr><th>설비</th><th>현재</th><th>목표</th><th>이유</th></tr></thead><tbody>${rows}</tbody></table>
+      <div class="ctl">
+        <span>신호</span><div class="row">
+          <button class="sdk" data-door="${s.pos}:${!s.doorOpen}">${s.doorOpen ? '문 닫기' : '문 열기'}</button>
+          <button class="sdk" data-sit="${s.pos}:${!s.occupied}">${s.occupied ? '일어나기' : '앉기'}</button>
+          <button class="sim" data-belt="${s.pos}:${!s.belt}">${s.belt ? '벨트 풀기' : '벨트 매기'}</button></div>
+        <span>누구</span><div class="row">${people}<button class="user" data-choose="${s.pos}:object" ${!s.occupied ? 'disabled' : ''}>짐</button></div>
+        <span>모드</span><div class="row">${modes}${s.pos === 'FL' ? '<span class="muted" style="font-size:12px">운전석은 자동 적용·끄기만</span>' : ''}</div>
+        <span>말하기</span><div class="row"><button class="user" data-hot="${s.pos}:true" ${!s.occupied ? 'disabled' : ''}>"더워"</button><button class="user" data-hot="${s.pos}:false" ${!s.occupied ? 'disabled' : ''}>"추워"</button></div>
+      </div>`;
+    seatBox.appendChild(el);
+  });
+
+  const on = dev('AMBIENT_ON'), lv = dev('AMBIENT_LEVEL'), col = dev('AMBIENT_COLOR'), rc = dev('RECIRC');
+  const lit = on && on.actual === '켜짐';
+  const pct = lv ? parseInt(lv.actual) || 0 : 0;
+  $('#sw').style.background = lit && col?.rgb ? col.rgb : 'transparent';
+  $('#sw').style.opacity = lit ? (0.25 + pct / 100 * 0.75) : 0;
+  $('#sharedNow').textContent = `${lit ? `조명 ${pct}% · ${col.actual}` : '조명 꺼짐'} · ${rc ? rc.actual : '-'}${t.recircMin && rc?.actual === '내기' ? ` ${t.recircMin}분` : ''}`;
+  $('#decisions').innerHTML = S.decisions.length ? S.decisions.map(d =>
+    `<li><b>${d.device} → ${d.value}</b><small>${d.why}${d.compensation ? ' · ' + d.compensation : ''}</small></li>`).join('')
+    : '<li class="muted">부딪히는 요청이 없어요. 공유 설비는 그대로 둡니다.</li>';
+  if (S.globalPending) $('#decisions').innerHTML += `<li><b>먼저 묻기: ${S.globalPending.title}</b><small>${S.globalPending.reason}</small>
+    <div class="row" style="margin-top:6px"><button class="user" data-accept="">외기로 바꾸기</button><button data-decline="">괜찮아요</button></div></li>`;
+
+  document.querySelectorAll('[data-prio]').forEach(b => b.classList.toggle('on', b.dataset.prio === S.settings.priority));
+  document.querySelectorAll('[data-focus]').forEach(b => b.classList.toggle('on', +b.dataset.focus === S.settings.focusAfterMin));
+  document.querySelectorAll('[data-gear]').forEach(b => b.classList.toggle('on', (b.dataset.gear === 'Drive') === t.driving));
+  $('#night').classList.toggle('on', t.night); $('#night').textContent = t.night ? '야간 ✓' : '야간';
+  $('#speed').classList.toggle('on', t.speed > 1);
+  $('#airbagOn').classList.toggle('on', S.airbagOff);
+  $('#prioNote').textContent = `${S.settings.priorityLabel}. 운전자 졸음 방지는 어떤 설정보다 우선합니다.`;
+  $('#log').textContent = S.log.join('\n');
+}
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b || b.disabled) return;
+  const d = b.dataset; const sp = v => v.split(':');
+  if (d.door) { const [seat, v] = sp(d.door); act({ type: 'door', seat, value: v === 'true' }); }
+  else if (d.sit) { const [seat, v] = sp(d.sit); act({ type: 'sit', seat, value: v === 'true' }); }
+  else if (d.belt) { const [seat, v] = sp(d.belt); act({ type: 'belt', seat, value: v === 'true' }); }
+  else if (d.choose) { const [seat, person] = sp(d.choose); act({ type: 'choose', seat, person }); }
+  else if (d.mode) { const [seat, value] = sp(d.mode); act({ type: 'mode', seat, value }); }
+  else if (d.hot) { const [seat, v] = sp(d.hot); act({ type: 'complain', seat, hot: v === 'true' }); }
+  else if (d.accept !== undefined) act({ type: 'accept', seat: d.accept || null });
+  else if (d.decline !== undefined) act({ type: 'decline', seat: d.decline || null });
+  else if (d.gear) act({ type: 'gear', value: d.gear });
+  else if (d.jump) act({ type: 'jump', value: +d.jump });
+  else if (d.prio) act({ type: 'priority', value: d.prio });
+  else if (d.focus) act({ type: 'focusAfter', value: +d.focus });
+});
+$('#routeOn').onclick = () => act({ type: 'route', value: true });
+$('#routeOff').onclick = () => act({ type: 'route', value: false });
+$('#airbagOn').onclick = () => act({ type: 'airbag', value: true });
+$('#airbagOff').onclick = () => act({ type: 'airbag', value: false });
+$('#recircOn').onclick = () => act({ type: 'recircConsole', value: true });
+$('#recircOff').onclick = () => act({ type: 'recircConsole', value: false });
+$('#night').onclick = () => act({ type: 'night', value: !S.trip.night });
+$('#speed').onclick = () => act({ type: 'speed', value: S.trip.speed > 1 ? 1 : 30 });
+$('#to15').onclick = () => act({ type: 'toRemain', value: 15 });
+$('#reset').onclick = async () => {
+  done.clear();
+  await run([{ type: 'speed', value: 1 }, { type: 'gear', value: 'Park' }, { type: 'airbag', value: false }, { type: 'recircConsole', value: false },
+    ...SEATS.flatMap(seat => [{ type: 'belt', seat, value: false }, { type: 'sit', seat, value: false }, { type: 'door', seat, value: false }]), 800,
+    { type: 'route', value: false }, { type: 'reset' }]);
+};
+
+async function poll() {
+  try {
+    const r = await fetch('/api/state', { cache: 'no-store' });
+    S = await r.json();
+    $('#conn').innerHTML = `<span class="ok">● 연결됨</span>${S.consoleError ? ` · <span class="warn">Virtual Console: ${S.consoleError}</span>` : ''}`;
+    render();
+  } catch (e) { $('#conn').innerHTML = '<span class="warn">● 앱에 연결할 수 없음 — 에뮬레이터에서 "따로 또 같이" 앱을 여세요</span>'; }
+  setTimeout(poll, 700);
+}
+async function pollConsole() {
+  try {
+    const c = await (await fetch('/api/console', { cache: 'no-store' })).json();
+    const b = c.body || {}, h = c.hvac || {}, rl = b.reading_lights || {}, am = b.ambient_light || {};
+    const on = v => v ? '켜짐' : '꺼짐';
+    const seatT = v => v > 0 ? `온열 ${v}` : v < 0 ? `통풍 ${-v}` : '꺼짐';
+    const rows = [
+      ['기어', c.gear?.actual?.value ?? '-'],
+      ['독서등', `운전 ${on(rl.front_left)} · 조수 ${on(rl.front_right)} · 뒤왼 ${on(rl.rear_left)} · 뒤오 ${on(rl.rear_right)}`],
+      ['앰비언트', `${am.mode ?? '-'} · ${am.brightness_pct ?? '-'}% · ${am.color ?? '-'}`],
+      ['설정 온도', `운전 ${h.driver?.temp_c ?? '-'}° · 조수 ${h.passenger?.temp_c ?? '-'}°`],
+      ['시트(앞)', `운전 ${seatT(h.driver?.seat_temp)} · 조수 ${seatT(h.passenger?.seat_temp)}`],
+      ['시트(뒤)', `왼쪽 ${seatT(h.row2?.left_seat_temp)} · 오른쪽 ${seatT(h.row2?.right_seat_temp)}`],
+      ['내·외기', h.recirc_on ? '내기' : '외기'],
+    ];
+    $('#console').innerHTML = rows.map(([k, v]) => `<tr><td class="muted">${k}</td><td>${v}</td></tr>`).join('');
+  } catch (e) {}
+  setTimeout(pollConsole, 2500);
+}
+poll(); pollConsole();
+</script>
+</body>
+</html>
