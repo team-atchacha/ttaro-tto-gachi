@@ -87,7 +87,8 @@ object Hub {
         }
         console = c; navi = n
         bridge = VehicleBridge(ctx, e, main)
-        server = PanelServer(ctx, e, c, n, main)
+        val b = bridge!!
+        server = PanelServer(ctx, e, c, n, main) { k, s, v, cb -> b.directTest(k, s, v, cb) }
         e.log("앱 시작 · 로그인된 차량 프로필 ${e.driverLabel}" +
             (e.driverProfile?.let { " → 주인 ${it.name}" } ?: " → 주인 미등록 (처음 운전석에 앉을 때 물어봄)"))
         c.start(); server!!.start(); bridge!!.start(); n.start()

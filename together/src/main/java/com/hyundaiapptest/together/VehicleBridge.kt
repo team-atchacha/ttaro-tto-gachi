@@ -355,6 +355,50 @@ class VehicleBridge(private val ctx: Context, private val engine: Engine, privat
         }
     }
 
+    // ── 점검용: 앱 판단을 거치지 않고 SDK로 바로 쓰고 다시 읽는다(/api/sdk) ──
+
+    /**
+     * kind 설비에 value를 SDK로 보내고, 보내기 전 값·SDK 응답·0.6/1.8/3초 뒤 다시 읽은 값을 돌려준다.
+     * 앱이 붙잡고 있지 않은 설비(target 없음)에 쓰면 Engine은 사람이 바꾼 값으로 보고 되돌리지 않는다.
+     */
+    fun directTest(kind: DevKind, seat: SeatPos?, value: String, cb: (org.json.JSONObject) -> Unit) {
+        val d = dev(kind, seat)
+        val want: Any = when (kind) {
+            DevKind.READING, DevKind.AMBIENT_ON, DevKind.RECIRC -> value.toBoolean()
+            DevKind.TEMP -> value.toFloat()
+            DevKind.AMBIENT_COLOR -> value.removePrefix("#").toInt(16)
+            else -> value.toInt()
+        }
+        val out = org.json.JSONObject().put("device", d.key.label).put("gear", engine.gear).put("uxRestricted", engine.uxRestricted ?: org.json.JSONObject.NULL).put("driving", engine.driving).put("want", Cabin.fmt(kind, want))
+        val a = area(d)
+        read(d) { before ->
+            out.put("before", Cabin.fmt(kind, before))
+            val reads = org.json.JSONArray()
+            val readAt = { delays: List<Long> ->
+                fun next(i: Int) {
+                    if (i >= delays.size) { out.put("reads", reads).put("ok", reads.length() > 0 && reads.getJSONObject(reads.length() - 1).getBoolean("match")); cb(out); return }
+                    main.postDelayed({ read(d) { v -> reads.put(org.json.JSONObject().put("ms", delays.take(i + 1).sum()).put("value", Cabin.fmt(kind, v)).put("match", Cabin.same(v, want))); next(i + 1) } }, delays[i])
+                }
+                next(0)
+            }
+            val okCb: () -> Unit = { onMain { out.put("sdk", "성공 콜백"); readAt(listOf(600L, 1200L, 1200L)) } }
+            val err: (Exception) -> Unit = { e -> onMain { out.put("sdk", "실패: ${e.message}").put("ok", false); readAt(listOf(600L)) } }
+            val light = vehicle.getLight(); val st = vehicle.getSeat(); val hvac = vehicle.getHVAC()
+            try {
+                when (kind) {
+                    DevKind.READING -> light.setReadingLightSwitch(a, if (want == true) LightSwitch.ON else LightSwitch.OFF, { okCb() }, err)
+                    DevKind.HEAT -> st.setHvacSeatTemperature(a, (want as Number).toInt(), { _, _ -> okCb() }, err)
+                    DevKind.VENT -> st.setHvacSeatVentilation(a, (want as Number).toInt(), { _, _ -> okCb() }, err)
+                    DevKind.TEMP -> hvac.setHvacTemperature(a, (want as Number).toFloat(), TemperatureUnit.CELSIUS, { _, _ -> okCb() }, err)
+                    DevKind.AMBIENT_ON -> light.setAmbientLightSwitch(a, if (want == true) LightSwitch.ON else LightSwitch.OFF, { _, _ -> okCb() }, err)
+                    DevKind.AMBIENT_LEVEL -> light.setAmbientLightBrightness(a, (want as Number).toInt(), { _, _ -> okCb() }, err)
+                    DevKind.AMBIENT_COLOR -> light.setAmbientLightBrightnessColor(a, (want as Number).toInt(), { _, _ -> okCb() }, err)
+                    DevKind.RECIRC -> hvac.setHvacRecirculation(a, want as Boolean, { _, _ -> okCb() }, err)
+                }
+            } catch (e: Exception) { err(e) }
+        }
+    }
+
     private fun safe(name: String, block: () -> Unit) {
         try { block() } catch (e: Exception) { onMain { engine.log("$name 예외: ${e.message}") } }
     }

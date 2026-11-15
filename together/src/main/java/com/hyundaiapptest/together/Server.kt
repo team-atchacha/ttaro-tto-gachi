@@ -68,6 +68,8 @@ class PanelServer(
     private val console: ConsoleClient,
     private val navi: NaviBridge,
     private val main: Handler,
+    /** 점검용: SDK로 바로 쓰고 다시 읽는다 */
+    private val sdkTest: ((DevKind, SeatPos?, String, (JSONObject) -> Unit) -> Unit)? = null,
 ) {
     private var socket: ServerSocket? = null
 
@@ -94,7 +96,7 @@ class PanelServer(
     fun stop() { runCatching { socket?.close() } }
 
     private fun handle(s: Socket) {
-        s.soTimeout = 5000
+        s.soTimeout = 12000
         val input = BufferedReader(InputStreamReader(s.getInputStream(), Charsets.UTF_8))
         val requestLine = input.readLine() ?: return
         val (method, target) = requestLine.split(" ").let { it[0] to it.getOrElse(1) { "/" } }
@@ -114,6 +116,17 @@ class PanelServer(
                 send(out, 200, "application/json; charset=utf-8", onMainSync { stateJson() }.toByteArray())
             method == "GET" && path == "/api/console" ->
                 send(out, 200, "application/json; charset=utf-8", console.get("/vehicle/state").toByteArray())
+            // 점검용: GET /api/sdk?kind=HEAT&seat=FR&value=2 → 앱 판단 없이 SDK로 쓰고 다시 읽은 결과
+            method == "GET" && path == "/api/sdk" -> {
+                val q = target.substringAfter("?", "").split("&").filter { "=" in it }.associate { it.substringBefore("=") to java.net.URLDecoder.decode(it.substringAfter("="), "UTF-8") }
+                val latch = CountDownLatch(1); var res: JSONObject? = null
+                val r = runCatching {
+                    val kind = DevKind.valueOf(q.getValue("kind")); val seat = q["seat"]?.let { SeatPos.valueOf(it) }
+                    main.post { sdkTest!!(kind, seat, q.getValue("value")) { res = it; latch.countDown() } }
+                }
+                if (r.isFailure) res = JSONObject().put("ok", false).put("error", r.exceptionOrNull()?.message) else latch.await(8, TimeUnit.SECONDS)
+                send(out, 200, "application/json; charset=utf-8", (res ?: JSONObject().put("ok", false).put("error", "시간 초과")).toString(2).toByteArray())
+            }
             method == "POST" && path == "/api/act" -> {
                 val res = runCatching { act(JSONObject(body)) }.fold({ "{\"ok\":true}" }, { JSONObject().put("ok", false).put("error", it.message).toString() })
                 send(out, 200, "application/json; charset=utf-8", res.toByteArray())
