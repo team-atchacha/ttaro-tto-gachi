@@ -34,13 +34,15 @@ Pleos Connect 에뮬레이터 v2.1.0에서 Vehicle SDK 2.3.2와 NaviHelper SDK 3
 
 「따로 또 같이」는 탑승부터 하차까지 다섯 단계로 동작합니다.
 
-| 단계 | 하는 일 | 핵심 API | 코드 |
-|---|---|---|---|
-| **1. 알아보기** | 누가 어느 자리에 탔는지 파악 | `registerSeatOccupancy`, `registerDoorPosition`, 차량 사용자 프로필 | `Engine.kt` `VehicleBridge.kt` `Store.kt` |
-| **2. 먼저 묻기** | 탑승자 구성·주행 상황에 맞는 모드 제안. **운전자에게는 묻지 않음** | `registerGearSelection`, `CarUxRestrictionsManager`, `requestRoute` | `Engine.kt` `NaviBridge.kt` |
-| **3. 자리별 맞춤** | 모드에 따라 **그 자리의 설비만** 제어 | `setReadingLightSwitch`, `setHvacSeatTemperature`, `setHvacSeatVentilation` | `Planner.kt` `VehicleBridge.kt` |
-| **4. 조율** | 함께 쓰는 설비의 충돌을 우선순위로 해결 | `setAmbientLightSwitch`, `setHvacRecirculation` | `Planner.kt` |
-| **5. 정리** | 하차한 자리의 설정을 원래대로 돌리고 탑승 기록 저장 | 좌석 점유 해제 → 처음 읽은 값으로 복원 | `Engine.kt` `Store.kt` |
+| 단계 | 하는 일 | 핵심 API |
+|---|---|---|
+| **1. 알아보기** | 누가 어느 자리에 탔는지 파악 | `registerSeatOccupancy` `registerDoorPosition` 차량 사용자 프로필 |
+| **2. 먼저 묻기** | 탑승자 구성·주행 상황에 맞는 모드 제안. **운전자에게는 묻지 않음** | `registerGearSelection` `CarUxRestrictionsManager` `requestRoute` |
+| **3. 자리별 맞춤** | 모드에 따라 **그 자리의 설비만** 제어 | `setReadingLightSwitch` `setHvacSeatTemperature` `setHvacSeatVentilation` |
+| **4. 조율** | 함께 쓰는 설비의 충돌을 우선순위로 해결 | `setAmbientLightSwitch` `setHvacRecirculation` |
+| **5. 정리** | 하차한 자리의 설정을 원래대로 돌리고 탑승 기록 저장 | 좌석 점유 해제 → 처음 읽은 값으로 복원 |
+
+각 단계의 구현 파일은 [저장소 구조](#저장소-구조)에 있습니다.
 
 <details>
 <summary>단계별로 쓰는 API 전체 (펼치기)</summary>
