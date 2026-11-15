@@ -1,180 +1,220 @@
-# hyundai-app-test — Pleos Vehicle SDK 검증 프로브
+# 따로 또 같이
 
-현대차그룹 차량용 앱 공모전 아이디어("좌석을 아는 차가 먼저 말을 건다")가 Pleos Connect Emulator에서 실제로 동작하는지 확인하는 테스트 앱이다. `ear_project`와는 무관한 독립 저장소이고, 검증이 끝나면 폐기한다.
+> 각자의 자리는 다르게, 함께 쓰는 공간은 조화롭게. 탑승과 동시에 시작되는 개인화와 상황별 모드 전환으로 모두가 편안한 이동 경험을 만듭니다.
 
-## 검증 결과 (2026-11-07, Emulator v2.1.0 / Vehicle SDK 2.3.2)
+현대자동차그룹 차량용 앱 개발 공모전 출품작(팀 앗차차)의 시연 앱입니다. Pleos Connect 에뮬레이터 v2.1.0에서 **Vehicle SDK 2.3.2**와 **NaviHelper SDK 3.0.5**로 동작합니다.
+
+- 최종 데모 앱: `together/`
+- 시연 영상과 2차 PT는 이 앱과 웹 조작판으로 진행합니다.
+
+## 다섯 단계와 쓰는 SDK
+
+「따로 또 같이」는 탑승부터 하차까지 다섯 단계로 동작합니다.
+
+| 단계 | 하는 일 | 쓰는 API | 코드 |
+|---|---|---|---|
+| 1. 알아보기 | 누가 어느 자리에 탔는지 파악 | Seat `registerSeatOccupancy`·`registerSeatBeltBuckledState`, Door `registerDoorPosition`, Safety `registerTelltales`(조수석 에어백 OFF), Android 차량 사용자 프로필 | `Engine.kt`, `VehicleBridge.kt`, `Store.kt` |
+| 2. 먼저 묻기 | 탑승자 구성·주행 상황에 맞는 모드 제안. 운전자에게는 묻지 않음 | Gear `registerGearSelection`, Android `CarUxRestrictionsManager`, NaviHelper `requestRoute`·`getDestinationInfo` | `Engine.kt`, `NaviBridge.kt` |
+| 3. 자리별 맞춤 | 모드에 따라 그 자리의 설비만 제어 | `setReadingLightSwitch`, `setHvacSeatTemperature`, `setHvacSeatVentilation`, `setHvacTemperature` | `Planner.kt`, `VehicleBridge.kt` |
+| 4. 조율 | 함께 쓰는 설비의 충돌을 우선순위로 해결 | `setAmbientLightSwitch`·`setAmbientLightBrightness`·`setAmbientLightBrightnessColor`, `setHvacRecirculation` | `Planner.kt` |
+| 5. 정리 | 하차한 자리의 설정을 원래대로 돌리고 탑승 기록 저장 | 좌석 점유 해제 → 처음 읽은 값으로 복원 | `Engine.kt`, `Store.kt` |
+
+모드는 다섯 가지입니다.
+
+| 모드 | 하는 일 |
+|---|---|
+| 수면 | 그 자리 시트 온열을 켜고 실내 조명을 낮춤 |
+| 영상 시청 | 주변 조명을 낮춤 |
+| 독서·공부 | 그 자리 독서등을 켬 |
+| 운전 집중 | 연속 운전 기준(기본 60분, 설정 가능)을 넘으면 운전석 통풍·온도를 조절하고 외기로 바꿈 |
+| 다 같이 휴식 | 야간에 동승자 절반 이상이 쉬면 운전자 집중 환경은 유지하고 나머지 자리에 수면 환경을 적용 |
+
+## 시연 시나리오 (기획서 4장)
+
+토요일 저녁, 네 식구가 1시간 30분 거리의 집으로 돌아가는 상황입니다. 웹 조작판의 버튼 순서가 곧 시나리오 순서입니다.
+
+1. **탑승:** 운전석은 로그인 프로필로 아빠를 자동 인식합니다. 나머지 자리는 탑승 기록으로 후보를 추천합니다.
+2. **확인·각자 모드:** 추천을 확인합니다. 출발 전에 지민은 독서(그 자리 독서등 켜짐), 준호는 영상을 고릅니다.
+3. **출발:** 내비에 집을 설정하고 기어를 D로 바꿉니다. 운전자에게는 선택을 요구하지 않습니다.
+4. **엄마가 잠듦:** 엄마가 수면 모드를 고릅니다. 조수석 시트 온열을 켜고 실내 조명을 낮추며, 지민의 독서등은 유지합니다.
+5. **아빠가 졸림:** 연속 운전 기준을 넘으면 운전 집중 모드가 켜집니다. 운전석만 통풍·온도를 바꾸고, 엄마의 온열은 그대로입니다. 화면에는 "가까운 휴게소에서 쉬어 가세요"라고 안내합니다. 휴게소를 경유지로 넣는 것은 운전자가 내비에서 직접 합니다.
+6. **도착 전 깨우기:** 남은 시간이 15분이 되면 조명을 서서히 밝히고, 화면으로 도착을 알립니다.
+7. **하차:** 기어 P, 좌석이 비면 자리별 설정을 원래대로 돌리고 다시 읽어 확인합니다.
+
+추가 장면은 네 가지입니다.
+- 조수석에 아이: 에어백 OFF 경고등을 보고 어린이 후보를 추천합니다.
+- 뒷자리에 가방: 벨트를 매지 않으면 짐일 수 있다고 묻습니다.
+- 뒷자리가 덥다: 시트 온열부터 낮추고, 그다음은 우선순위로 판단합니다.
+- 우선순위 바꾸기: 조명 색이 바뀝니다.
+
+## 실행 방법
+
+### 준비
+- Pleos Connect 에뮬레이터 v2.1.0. Pleos Playground 안내대로 설치하고, cold boot로 띄웁니다.
+- Android SDK(platform 34)와 JDK 17
+- Pleos SDK는 `settings.gradle.kts`에 적힌 Pleos Playground Maven 저장소에서 받습니다.
+
+### 빌드와 설치
+
+```bash
+./gradlew :together:assembleDebug
+
+emulator -avd <Pleos AVD 이름> -no-snapshot -gpu swiftshader_indirect &
+adb install -r together/build/outputs/apk/debug/together-debug.apk
+
+# 차량 사용자 프로필을 여러 개 만든 경우 프로필마다 설치(운전자 프로필 인식 시연용)
+for u in $(adb shell pm list users | grep -o '{[0-9]*' | tr -d '{'); do
+  adb shell pm install-existing --user $u com.hyundaiapptest.together
+done
+
+adb forward tcp:8088 tcp:8088   # Virtual Console
+adb forward tcp:8090 tcp:8090   # 웹 조작판
+adb shell am start --user "$(adb shell am get-current-user | tr -d '\r')" \
+  -n com.hyundaiapptest.together/.MainActivity
+```
+
+브라우저에서 아래 두 주소를 엽니다.
+- 웹 조작판: http://127.0.0.1:8090
+- Virtual Console: http://127.0.0.1:8088
+
+참고 사항
+- 조작판 없이 앱 화면과 Virtual Console만으로도 탑승·확인·모드·조율·하차까지 시연할 수 있습니다. 시간이 지나야 나오는 장면(수면 제안·운전 집중·깨우기·도착)은 조작판의 시간 버튼이 필요합니다.
+- 에뮬레이터가 실제로 달리지 않아서 남은 시간이 줄지 않습니다.
+- WSL에서 실행할 때는 Windows 쪽 `adb.exe`와 `curl.exe`를 씁니다. adb forward가 Windows의 127.0.0.1에 연결되기 때문입니다.
+- `seatid`와 `together`는 같은 포트(8090)를 쓰므로 한 번에 하나만 실행합니다.
+
+## 공모전 개발 범위와의 관계
+
+공모전 공지("공모전 개발 범위 및 기술 문의 안내")에 따라 앱 기능은 공개된 Pleos Playground SDK 범위 안에서 만들었습니다. 아래는 코드가 쓰는 것을 성격별로 나눈 것입니다.
+
+| 구분 | 쓰는 것 | 비고 |
+|---|---|---|
+| Pleos 공개 SDK | Vehicle 2.3.2, NaviHelper 3.0.5 | 앱 기능은 모두 이 SDK로 읽고 씁니다 |
+| Android 표준 API | `CarUxRestrictionsManager`(주행 제한 상태), 차량 사용자 프로필(앱 데이터가 프로필마다 분리됨), `distractionOptimized` 선언 | Pleos SDK가 아닌 Android Automotive 플랫폼 기능입니다 |
+| 시연 보조 도구 (앱 기능 아님) | 웹 조작판(8090)이 Virtual Console(8088) HTTP를 호출해 문·착석·기어·에어백 OFF를 바꿉니다. 벨트·시간 빨리 감기·야간은 앱에 직접 넣습니다 | 에뮬레이터에서 차량 신호를 만들기 위한 도구입니다. 앱은 이 값을 SDK 구독으로만 받습니다 |
+| 개발 점검용 | `GET /api/sdk?kind=…&seat=…&value=…` | 앱 판단 없이 SDK로 쓰고 다시 읽은 결과를 돌려줍니다(아래 "주행 중 제어 확인") |
+| 기획서상 계획 (데모 미구현) | SpeechToText, TextToSpeech, Gleo Interface(App Schema) | 데모에서는 음성 대신 화면 버튼("더워요/추워요", 모드 버튼)을 씁니다. 음성 인식은 SpeechToText SDK로만 처리하고, 차량 마이크 음성을 외부 서비스로 보내지 않습니다 |
+
+## 안전과 개인정보
+
+- **운전자는 화면을 만질 필요가 없습니다.**
+  - 주행 중에는 운전자에게 선택을 요구하지 않습니다.
+  - 운전자가 할 수 있는 조작은 '끄기' 하나뿐입니다.
+  - 주행 중에도 화면이 보이도록 액티비티를 `distractionOptimized`로 선언했습니다.
+- **운전자 안전이 먼저입니다.** 운전자 졸음 방지와 다른 탑승자의 휴식이 충돌하면 운전자 쪽을 따릅니다.
+- **SDK가 알려 준 범위 밖의 값은 보내지 않습니다.** 지원 좌석과 값의 범위는 `check…Capabilities`로 받습니다.
+- **보낸 뒤 다시 읽어 확인합니다.**
+  - 명령은 묶음별로 하나씩 보냅니다(공조·시트 묶음, 조명 묶음).
+  - 보낸 뒤 최대 3번(약 3초) 다시 읽습니다.
+  - 값이 다르면 한 번만 다시 보내고, 그래도 다르면 실패를 화면에 알립니다.
+- **가족 이름·판단 규칙·탑승 기록은 기기 안(`SharedPreferences`)에만 저장하고 외부 서버로 보내지 않습니다.** `INTERNET` 권한은 기기 안 주소(127.0.0.1)인 웹 조작판과 Virtual Console을 연결할 때만 씁니다.
+- 예시 가족(아빠·엄마·지민·준호)과 탑승 기록은 시연용 가상 데이터입니다.
+
+## 에뮬레이터 검증 결과
+
+### SDK 기능별 확인 (2026-11-07 ~ 11-15)
 
 | 항목 | API | 결과 |
 |---|---|---|
-| 권한 부여 | 매니페스트 선언만 | `CAR_*`, `CONTROL_CAR_*`, **`PRIVATE_CAR_SAFETY`까지 전부 granted**. 에뮬레이터에서 `PRIVATE_CAR_SAFETY`의 정의는 `prot=normal`이다(문서에는 signature\|privileged로 적혀 있음) |
-| 경고등 1회 조회 | `getTelltalesInfo` | ✅ 성공 |
-| 경고등 지원 확인 | `checkTelltalesCapabilities` | ✅ `accessType=READ` |
-| **경고등 실시간 구독** | `registerTelltales` | ✅ Console에서 켜자마자 수신: `TPMS:ON`, `ENGINE_OIL_PRESSURE:BLINK` |
-| 좌석 점유 조회·구독 | `getCurrentSeatOccupancy`, `registerSeatOccupancy` | ⚠️ 동작하지만 **값이 반대로 들어온다**. Console에서 Occupied로 둔 좌석이 앱에서는 `false`로 온다(4좌석 모두 같고, 3회 재현). 에뮬레이터·SDK 버그로 보이며 문의 대상이다 |
-| 도어 조회·구독 | `getCurrentDoorPosition`, `registerDoorPosition` | ✅ 뒷좌석 왼쪽 문을 열면 `ROW_2_LEFT 위치=1` |
-| 독서등 좌석별 제어 | `setReadingLightSwitch(ROW_2_LEFT, ON)` | ✅ 앱 재조회 `ON`, Console `rear_left: true` |
-| 시트 온열 좌석별 제어 | `setHvacSeatTemperature(ROW_1_RIGHT, 2)` | ✅ 앱 재조회 `2`, Console 동승석 `Heating 2` |
-| 안전벨트 착용 상태 | `getCurrentSeatBeltBuckledState` | ⚠️ 호출은 성공(앞 2석·뒤 3석 지원)하지만 항상 `false`다. Console에 벨트 항목이 없어 값을 바꿀 방법이 없다 |
-| 시트 위치(앞뒤·높이·등받이) | `getCurrentSeat…Position`, `check…Capabilities` | ⚠️ 호출은 성공(범위 0~100)하지만 항상 `0`이다. Console 숨은 항목(`PUT /vehicle/seat?kind=position&control=slide&value=42&area=driver`)으로 Console 상태는 바뀌어도 앱 값은 그대로다 |
-| 시트 이동 | `moveSeatForeAft` | ❌ `IllegalArgumentException: 50001` |
-| 워셔액 부족 경고 | `hasLowWasherFluidWarning` | ❌ 에뮬레이터 미지원(`property ID ... not supported: 0x2120071e`) |
-| 안전벨트 미착용 경고 | `hasSeatBeltNotBuckledWarning` | ❌ 에뮬레이터 미지원(`0x25200709`). 대신 경고등 `SeatBelt` telltale로 대체할 수 있다 |
+| 권한 부여 | 매니페스트 선언만 | `CAR_*`, `CONTROL_CAR_*`, `PRIVATE_CAR_SAFETY`까지 모두 허용됨. 에뮬레이터에서 `PRIVATE_CAR_SAFETY`는 `prot=normal`로 정의돼 있음(문서에는 signature\|privileged) |
+| 경고등 조회·구독 | `getTelltalesInfo`, `checkTelltalesCapabilities`, `registerTelltales` | ✅ Console에서 켜자마자 수신(예: `TPMS:ON`, `PASSENGER_AIRBAG_OFF`) |
+| 좌석 점유 조회·구독 | `getCurrentSeatOccupancy`, `registerSeatOccupancy` | ⚠️ 앞 2석·뒤 3석 모두 동작하지만 **값이 반대로 들어옴**(Console Occupied → 앱 `false`, 3회 재현). 앱에서 값을 뒤집는 곳을 한 곳(`VehicleBridge.invertOccupancy`)으로 모았음 |
+| 도어 조회·구독 | `getCurrentDoorPosition`, `registerDoorPosition` | ✅ 열림·닫힘이 바로 전달됨 |
+| 안전벨트 상태 | `getCurrentSeatBeltBuckledState`, `registerSeatBeltBuckledState` | ⚠️ 호출은 성공하지만 항상 `false`. Console에 벨트 항목이 없어 조작판의 시험 입력으로 앱 처리 로직을 확인함 |
+| 독서등 | `setReadingLightSwitch`, `getCurrentReadingLightState` | ✅ 4자리 따로 제어. ⚠️ **기어가 P가 아니면 거부됨**(아래 참고). 실제 상태가 1초 넘게 늦게 바뀜 |
+| 시트 온열 | `setHvacSeatTemperature` | ✅ 4자리 따로 제어, 주행 중(D)에도 됨 |
+| 시트 통풍 | `setHvacSeatVentilation` | ✅ 앞 2자리, 주행 중에도 됨. ⚠️ 앞좌석은 온열과 통풍이 한 값(-3~3)을 나눠 써서 모드마다 한쪽만 씀 |
+| 설정 온도 | `setHvacTemperature` | ✅ 운전석·조수석 따로, 주행 중에도 됨 |
+| 앰비언트 조명 | `setAmbientLightSwitch`·`Brightness`·`BrightnessColor` | ✅ 주행 중에도 됨. 5자리를 묶은 영역 하나뿐이라 공용 설비로 조율함. 실제 상태(`getAmbientLightState`)가 스위치를 따라가지 않아 스위치 값을 읽음 |
+| 내·외기 | `setHvacRecirculation` | ✅ 5자리 묶음 영역 |
+| 풍량 | `setHvacFanSpeed` | ❌ 읽기는 되지만 쓰기는 사용 불가 → 운전 집중은 온도·통풍으로 구성 |
+| 시트 위치 | `getCurrentSeat…Position`, `moveSeatForeAft` | ❌ 위치는 항상 `0`, 이동은 `50001`(`ERROR_DRIVING_RESTRICTED`) → 기획서에서 향후 계획으로 둠 |
+| 경로 안내·남은 시간 | NaviHelper `requestRoute`, `onRouteStarted`, `getDestinationInfo` | ✅ 실제 내장 내비로 경로를 잡음(예시 경로 79분·101km). `onDestinationArrived`는 에뮬레이터에서 오지 않아 남은 시간 0을 도착으로 판단 |
+| 주행 제한 상태 | `CarUxRestrictionsManager` | ✅ 기어가 P가 아니면 "제한 필요"로 바뀜 |
+| 일부 경고 조회 | `hasLowWasherFluidWarning`, `hasSeatBeltNotBuckledWarning` | ❌ 에뮬레이터 미지원 |
 
-## 최종 데모: 「따로 또 같이」 (`together/`)
+### 데모를 만들며 확인한 것
+- **주행 중에는 일반 앱 화면이 "주행 중에는 사용할 수 없습니다"로 가려집니다.** 액티비티에 `<meta-data android:name="distractionOptimized" android:value="true"/>`를 넣으면 보입니다.
+- **공조 값을 동시에 여러 개 쓰면 일부가 반영되지 않았습니다.** 그래서 명령은 묶음 안에서 하나씩 보냅니다.
+- **`requestRoute`는 내비 화면을 앞으로 띄웁니다.**
+  - 판단은 포그라운드 서비스(`DemoService`)가 계속 돌리므로, 내비가 앞에 떠도 조율은 이어집니다.
+  - 경로를 새로 잡으면 이전 안내의 `onRouteEnded`가 바로 뒤따라 옵니다. 그래서 시작 후 15초 안에 오는 종료 이벤트는 무시합니다.
+- **Virtual Console 화면에는 시트 통풍과 앰비언트 스위치가 보이지 않습니다.** SDK로 다시 읽으면 바뀐 값이 나옵니다. 온열·온도·밝기는 Console에도 반영됩니다.
+- **일반 앱은 차량 프로필 이름(`UserManager.getUserName`)을 읽을 수 없습니다.** 앱 데이터가 프로필마다 따로 저장되는 점을 이용해, 처음 운전석에 앉을 때 한 번 묻고 그 프로필에 기억합니다.
+- **사용자 확인에 시트 자세는 쓰지 않습니다.** 동승자는 대개 시트를 자기에게 맞추지 않고, 에뮬레이터의 시트 위치 값도 항상 0입니다.
 
-기획서 전체 흐름(알아보기 → 먼저 묻기 → 자리별 맞춤 → 조율 → 정리)을 에뮬레이터에서 실제 SDK로 돌리는 앱이다. `seatid/`의 탑승자 인식을 그대로 가져와 확장했다.
+### 독서등 주행 중 제한
+- **원인:** 차량 서비스(`ai.pleos.playground.service.vehicle` 2.3.22)가 처리합니다.
+  - 독서등 쓰기 요청이 오면 권한(`CONTROL_CAR_LIGHTS`)을 확인한 뒤 **기어(`GEAR_SELECTION`)를 읽고** 거부합니다.
+  - 응답 코드 `50001`은 SDK 오류 코드표의 **`ERROR_DRIVING_RESTRICTED`**입니다.
+  - 시트 온열 쓰기에서는 기어를 읽지 않습니다.
+- **판단 기준은 기어가 P인지입니다.** 속도는 보지 않아서, D에 두고 신호 대기로 서 있어도 막힙니다.
 
-- **차 화면(에뮬레이터):** 실제 사용자용 앱 화면. 위에서 본 실내(자리마다 사람·모드·켜 둔 설비, 실내 가장자리는 실제 앰비언트 색·밝기로 빛남), 오른쪽에 지금 필요한 한 가지(누구세요·먼저 묻기·자리 메뉴·설정)와 함께 쓰는 설비를 사람 말로 설명. 판단 기록·디버그 표시는 조작판에만 둔다
-- **다시 읽어 확인:** 독서등 실제 상태는 1초 넘게 늦게 따라와, 명령 뒤 최대 3번(약 3초) 다시 읽는다
-- **웹 조작판(http://127.0.0.1:8090):** 시나리오 7단계 버튼 + 추가 장면 4개, 좌석별 신호·탑승자 대신 누르기, 차량 신호·시간, 가족 설정, Virtual Console 실제 상태
+  | 기어 | 독서등 켜기·끄기 |
+  |---|---|
+  | P | ✅ |
+  | N · R · D | ❌ `50001` |
 
-### 쓰는 SDK
+- **P에서 켜 둔 독서등은 D로 바꿔도 켜진 채 유지됩니다.** 탑승자가 차량 버튼으로 끄는 것은 D에서도 됩니다.
+- **앱에서 우회할 방법은 없습니다.** Android 차량 속성으로 직접 쓰려면 `android.car.permission.CONTROL_CAR_INTERIOR_LIGHTS`가 필요한데, 이 권한은 `signature|privileged`라 일반 앱은 받을 수 없습니다.
+- **앱의 대응:**
+  - 독서 모드는 출발 전(P)에 맞춥니다.
+  - 주행 중에 바뀐 독서등 요청은 보류했다가 P가 되면 반영합니다.
+  - 주행 중에 바뀔 수 있는 설비(온열·통풍·온도·앰비언트)는 바로 적용합니다.
 
-| 단계 | 하는 일 | API | 경로 |
-|---|---|---|---|
-| 알아보기 | 착석·문·벨트·조수석 어린이·운전자 | Seat·Door·Safety 구독, Android 사용자 프로필 | Console → SDK (벨트만 시뮬레이션) |
-| 상황 판단 | 주행 중 | `registerGearSelection` + `CarUxRestrictionsManager` | Console 기어 → SDK |
-| 상황 판단 | 남은 시간 | NaviHelper `requestRoute` → `onRouteStarted`, `getDestinationInfo` | 실제 내장 내비(집까지 79분·101km) |
-| 자리별 맞춤 | 독서등·시트 온열·통풍·좌우 온도 | `setReadingLightSwitch`, `setHvacSeatTemperature`, `setHvacSeatVentilation`, `setHvacTemperature` | SDK로 보내고 0.6초 뒤 다시 읽어 확인 |
-| 조율 | 앰비언트 켜기·밝기·색, 내외기 | `setAmbientLight*`, `setHvacRecirculation` (5자리 묶음 영역) | 같음 |
+### 주행 중 제어 확인
 
-### 데모를 만들며 새로 확인한 것 (2026-11-13)
+앱이 실행 중일 때 브라우저로 아래 주소를 엽니다.
+- 결과 JSON의 `sdk`는 SDK 응답입니다.
+- `reads`는 0.6초·1.8초·3초 뒤에 다시 읽은 값입니다.
 
-- **주행 중(D)에는 독서등 제어가 `50001`로 거부된다.** P에서는 된다. 온열·온도·통풍·앰비언트는 D에서도 된다. → 앱은 독서등 변경을 "보류"했다가 정차하면 보내고, 지난번 모드 제안은 출발 전(탑승 직후)에 묻는다.
-- **주행 중에는 일반 앱 화면이 "주행 중에는 사용할 수 없습니다"로 가려진다.** 액티비티에 `<meta-data android:name="distractionOptimized" android:value="true"/>`를 넣으면 보인다. 대신 주행 중 운전자용 조작은 "끄기" 하나로 제한했다.
-- **앞좌석 온열과 통풍은 한 값(-3~3)을 나눠 쓴다**(Console `seat_temp`, 통풍 3 = -3). 둘을 함께 쓰면 서로 덮어써서, 모드마다 한쪽만 정한다.
-- **공조 값을 동시에 여러 개 쓰면 일부가 반영되지 않았다.** 공조·시트 묶음과 조명 묶음 안에서 명령을 하나씩 보내고, 다시 읽은 값이 다르면 한 번만 다시 보낸다.
-- **NaviHelper `requestRoute`는 실제 내비로 경로를 잡고 내비 화면을 앞으로 띄운다.** 경로를 새로 잡으면 이전 안내의 `onRouteEnded`가 바로 뒤따라 와서, 시작 직후 15초 안의 종료 이벤트는 무시한다. 에뮬레이터는 달리지 않아 남은 시간이 줄지 않으므로 조작판의 시간 버튼(빨리 감기·30배속)으로 주행 시계를 돌린다.
-- **앰비언트 실제 상태(`getAmbientLightState`)는 SDK로 바꾼 스위치를 따라가지 않는다.** 스위치 값을 읽는다. 독서등은 실제 상태(`getCurrentReadingLightState`)를 읽는다.
-- 판단은 포그라운드 서비스(`DemoService`)가 계속 돌리고, 액티비티는 그리기만 한다. 내비가 앞에 떠도 조율은 계속된다(내비에서 앱으로 돌아오는 건 사람이 앱 아이콘을 눌러야 한다).
-
-### 시나리오 (조작판 버튼 순서 = 기획서 4장)
-
-1. 탑승 — 운전석은 로그인 프로필로 아빠 자동, 나머지는 탑승 기록으로 추천
-2. 확인·각자 모드 — 추천 확인, 지난번처럼 지민 독서(독서등 켜짐)·준호 영상 (출발 전에 맞춤)
-3. 출발 — 내비 경로 + 기어 D → 운전자에게 묻지 않음
-4. 엄마가 잠듦 — +20분 → 엄마에게 수면 제안 → 조명 10%·호박색, 조수석 온열 2·+1°, 지민 독서등 유지
-5. 아빠가 졸림 — 연속 운전 60분 → 운전석만 통풍 3·−2°, 외기 (엄마는 온열 유지)
-6. 도착 전 깨우기 — 남은 15분 → 조명을 서서히 밝힘 → 도착하면 모드 종료, 조명 70%
-7. 하차 — 자리별 설정이 모두 원래값으로 (다시 읽어 확인)
-
-추가 장면: 조수석에 아이(에어백 OFF), 뒷자리에 가방(짐 판단), 뒷자리가 덥다(시트 온열 → 우선순위 판단), 우선순위 바꾸기(조명 색이 바뀜).
-
-### 실행
-
-```bash
-cd /home/jhp009/projects/hyundai-app-test
-export JAVA_HOME=$PWD/_tools/jdk GRADLE_USER_HOME=$PWD/_gradle-home ANDROID_USER_HOME=$PWD/_tools/android-user-home
-_tools/gradle-8.10.2/bin/gradle --no-daemon :together:assembleDebug
-ADB=/mnt/c/Users/jhp99/AppData/Local/Android/Sdk/platform-tools/adb.exe
-"/mnt/c/Users/jhp99/AppData/Local/Android/Sdk/emulator/emulator.exe" -avd Pleos_Probe -no-snapshot -no-boot-anim -gpu swiftshader_indirect &
-"$ADB" install -r "$(wslpath -w together/build/outputs/apk/debug/together-debug.apk)"
-for u in 10 11 12; do "$ADB" shell pm install-existing --user $u com.hyundaiapptest.together; done
-"$ADB" forward tcp:8088 tcp:8088 && "$ADB" forward tcp:8090 tcp:8090
-"$ADB" shell am start --user "$("$ADB" shell am get-current-user | tr -d '\r')" -n com.hyundaiapptest.together/.MainActivity
-# Windows 브라우저: http://127.0.0.1:8090 (조작판)
+```
+http://127.0.0.1:8090/api/sdk?kind=HEAT&seat=FR&value=2        # 조수석 시트 온열 2단
+http://127.0.0.1:8090/api/sdk?kind=VENT&seat=FL&value=3        # 운전석 통풍 3단
+http://127.0.0.1:8090/api/sdk?kind=TEMP&seat=FL&value=19.5     # 운전석 설정 온도
+http://127.0.0.1:8090/api/sdk?kind=AMBIENT_ON&value=true       # 앰비언트 켜기
+http://127.0.0.1:8090/api/sdk?kind=AMBIENT_LEVEL&value=30      # 앰비언트 밝기
+http://127.0.0.1:8090/api/sdk?kind=READING&seat=RL&value=true  # 독서등(P가 아니면 50001)
 ```
 
-`seatid`와 `together`는 같은 포트(8090)를 쓰므로 한 번에 하나만 연다.
+- `kind`: `READING`, `HEAT`, `VENT`, `TEMP`, `AMBIENT_ON`, `AMBIENT_LEVEL`, `AMBIENT_COLOR`(`%23RRGGBB`), `RECIRC`
+- `seat`: `FL`, `FR`, `RL`, `RR`
+- 기어 D에서 확인한 결과(2026-11-15): 온열·통풍·온도·밝기는 값을 바꿔 두 번씩 시험해 모두 반영됐고, 독서등은 `50001`로 거부됐습니다.
 
-## ① 알아보기 시연 앱 (`seatid/`)
+## 저장소 구조
 
-누가 어느 자리에 탔는지 판단하는 데모다. 에뮬레이터 화면에는 좌석 지도와 확인 질문이 나오고, 같은 앱이 PC 브라우저용 웹 조작판(http://127.0.0.1:8090)을 띄운다.
+| 경로 | 내용 |
+|---|---|
+| `together/` | 최종 데모 「따로 또 같이」(`com.hyundaiapptest.together`) |
+| `together/src/main/assets/panel.html` | 웹 조작판 |
+| `seatid/` | 1단계 "알아보기"만 떼어 만든 초기 시연 앱(`com.hyundaiapptest.seatid`) |
+| `app/` | SDK 기능별 동작을 처음 확인한 검증용 앱(`com.hyundaiapptest.probe`, 로그 태그 `PROBE`) |
 
-### 사람을 알아보는 방법 (SDK 조사 결과)
+`together/`의 주요 파일은 아래와 같습니다.
 
-SDK에는 시트 압력·몸무게 값이 없다. 좌석 점유는 앉았는지 여부(true/false)만 준다. 그래서 신호 여러 개를 조합한다.
+| 파일 | 하는 일 |
+|---|---|
+| `Engine.kt` | 탑승자 인식, 모드 제안, 상황 판단 |
+| `Planner.kt` | 자리별 목표값과 공용 설비 조율 |
+| `VehicleBridge.kt` | Vehicle SDK 구독, 제어, 다시 읽어 확인 |
+| `NaviBridge.kt` | NaviHelper 경로 안내와 남은 시간 |
+| `Store.kt` | 가족·탑승 기록 저장 |
+| `DemoService.kt` | 포그라운드 서비스 |
+| `MainActivity.kt`, `Ui.kt` | 차 화면 |
+| `Server.kt` | 웹 조작판 서버 |
 
-| 순서 | 신호 | SDK | 에뮬레이터 |
-|---|---|---|---|
-| 1 | 좌석 점유로 착석 감지 | `registerSeatOccupancy` | ✅ Console에서 조작 (값 반대 → 앱에서 뒤집음) |
-| 2 | 운전석: 차 화면에 로그인된 차량 사용자 프로필의 주인으로 자동 인식 | Android 사용자 프로필 | ✅ 사용자 `아빠`(11)·`엄마`(12)를 추가해 확인 |
-| 3 | 조수석: 에어백 OFF 경고등(실차 무게 센서가 어린이 감지) → 어린이 중에서 추천 | `registerTelltales` `PASSENGER_AIRBAG_OFF` | ✅ Console에서 조작 |
-| 4 | 그 밖에는 그 자리의 평소 탑승 기록으로 추천 → 화면에서 확인 | 앱 내부 저장 | ✅ |
-| 5 | 앉았는데 벨트를 8초 넘게 안 매면 "짐일 수 있음" | `registerSeatBeltBuckledState` | ⚠️ 항상 false → 조작판에서 시뮬레이션 |
-| 6 | 프로필 주인이 미등록이면 처음 운전석에 앉을 때 한 번 묻고 그 프로필에 기억 | 앱 내부 저장(프로필마다 따로) | ✅ |
-| 7 | 좌석이 비면 하차로 보고 자리 초기화 | `registerSeatOccupancy`, `registerDoorPosition` | ✅ |
+## 부록: Virtual Console을 스크립트로 조작하기
 
-조작판의 문·착석·에어백 버튼은 앱이 Virtual Console을 호출하고 SDK 구독으로 돌아오는 **실제 경로**다. 벨트만 앱에 직접 넣는다.
-
-- **시트 자세로 사람을 구분하는 방식은 뺐다.** 동승자는 대개 시트를 자기에게 맞추지 않고 그대로 앉는다. 시트 위치 API(`getCurrentSeat…Position`)는 있지만 에뮬레이터에서는 항상 0이다.
-- **운전자 프로필:** 일반 앱은 프로필 이름(`UserManager.getUserName`)을 읽을 수 없다(SecurityException). 대신 앱 데이터가 프로필마다 따로 저장되는 점을 이용해, 프로필마다 주인을 한 번 기억한다.
-- **프로필 전환:** 차 화면 맨 위 프로필 아이콘에서 바꾼다. 바꾼 뒤에는 주행 화면이나 내비가 앞에 뜨고, 백그라운드 앱은 안드로이드가 일시 정지시켜 조작판이 응답하지 않는다. 앱 목록에서 데모 앱을 다시 열어야 한다.
-- **에뮬레이터 그래픽:** 게임 등 GPU를 쓰는 중이면 `-gpu host`에서 사용자 전환 시 에뮬레이터가 죽었다. `-gpu swiftshader_indirect`(소프트웨어 렌더링)로 띄우면 안정적이다.
-
-### 실행
-
-```bash
-cd /home/jhp009/projects/hyundai-app-test
-export JAVA_HOME=$PWD/_tools/jdk GRADLE_USER_HOME=$PWD/_gradle-home ANDROID_USER_HOME=$PWD/_tools/android-user-home
-_tools/gradle-8.10.2/bin/gradle --no-daemon :seatid:assembleDebug
-ADB=/mnt/c/Users/jhp99/AppData/Local/Android/Sdk/platform-tools/adb.exe
-"$ADB" install -r "$(wslpath -w seatid/build/outputs/apk/debug/seatid-debug.apk)"
-"$ADB" forward tcp:8088 tcp:8088 && "$ADB" forward tcp:8090 tcp:8090
-for u in 10 11 12; do "$ADB" shell pm install-existing --user $u com.hyundaiapptest.seatid; done  # 프로필마다 설치
-"$ADB" shell am start --user "$("$ADB" shell am get-current-user | tr -d '\r')" -n com.hyundaiapptest.seatid/.MainActivity
-# Windows 브라우저: http://127.0.0.1:8090 (조작판), http://127.0.0.1:8088 (Virtual Console)
-```
-
-### 확인한 시나리오 (2026-11-09)
-
-1. 아빠 프로필로 로그인 → 첫 탑승은 한 번 물어봄 → 아빠 선택 → 다음 탑승부터 묻지 않고 자동 인식
-2. 엄마 조수석 → "평소 이 자리 6회"로 엄마 추천 → 확인
-3. 아이 둘 뒷좌석 → 자리별 기록으로 서연·지민 각각 추천
-4. 뒷좌석에 가방(벨트 없음) → 8초 뒤 "짐일 수 있음" → "짐이에요"
-5. 에어백 OFF 켜고 조수석 탑승 → 어린이(지민) 추천
-6. 엄마 프로필로 전환 → 한 번 물어봄 → 엄마 선택 → 다시 타면 자동 인식 → 아빠 프로필로 돌아가면 바로 아빠로 인식
-
-## 구조
-
-- `together/` — 최종 데모 「따로 또 같이」(`com.hyundaiapptest.together`). 조작판 `together/src/main/assets/panel.html`
-- `seatid/` — ① 알아보기 시연 앱(`com.hyundaiapptest.seatid`). 웹 조작판 `seatid/src/main/assets/panel.html`
-- `app/` — 프로브 앱(`com.hyundaiapptest.probe`, Kotlin, View 기반 단일 Activity)
-  - 실행하면 권한 상태와 조회 결과를 기록하고 구독을 시작한다. 로그 태그는 `PROBE`다.
-  - "제어 테스트 실행" 버튼: 독서등과 시트 온열을 제어한 뒤 다시 조회한다.
-- `_tools/` (gitignore) — 이 폴더 전용 Linux JDK 17, Gradle 8.10.2, Android SDK(platform 34, build-tools)
-- `_gradle-home/` (gitignore) — 이 폴더 전용 Gradle 캐시. 다른 프로젝트와 공유하지 않는다
-- `_downloads/` (gitignore) — 에뮬레이터 이미지 zip, SDK AAR, Virtual Console 카탈로그
-
-### 폴더 밖에 추가한 것 (폐기할 때 함께 지운다)
-
-- 에뮬레이터 안 사용자 프로필 `아빠`(11)·`엄마`(12) — AVD를 지우면 함께 사라진다
-
-- `C:\Users\jhp99\AppData\Local\Android\Sdk\system-images\android-34\pleos_car_emulator\` — Pleos 에뮬레이터 이미지(약 19GB)
-- `C:\Users\jhp99\.android\avd\Pleos_Probe.avd\`, `Pleos_Probe.ini` — AVD
-
-## 다시 실행하기
+Console은 **브라우저 세션 heartbeat가 있어야 차량 값을 받습니다.** 세션이 없으면 `503 {"error":"emulator_inactive"}`가 돌아오므로, 쓰기 직전에 heartbeat를 보냅니다.
 
 ```bash
-cd /home/jhp009/projects/hyundai-app-test
-export JAVA_HOME=$PWD/_tools/jdk GRADLE_USER_HOME=$PWD/_gradle-home ANDROID_USER_HOME=$PWD/_tools/android-user-home
-_tools/gradle-8.10.2/bin/gradle --no-daemon assembleDebug
-
-ADB=/mnt/c/Users/jhp99/AppData/Local/Android/Sdk/platform-tools/adb.exe
-EMU=/mnt/c/Users/jhp99/AppData/Local/Android/Sdk/emulator/emulator.exe
-"$EMU" -avd Pleos_Probe -no-snapshot -gpu host &      # cold boot 필수
-"$ADB" install -r "$(wslpath -w app/build/outputs/apk/debug/app-debug.apk)"
-"$ADB" forward tcp:8088 tcp:8088                      # Windows 브라우저에서 http://127.0.0.1:8088 = Virtual Console
-"$ADB" logcat -s PROBE:I
+hb(){ curl -s -X POST "http://127.0.0.1:8088/browser/session?client=cli" >/dev/null; }
+hb; curl -X PUT "http://127.0.0.1:8088/vehicle/seat?kind=occupied&value=true&area=driver"   # driver|passenger|rear_left|rear_right
+hb; curl -X PUT "http://127.0.0.1:8088/vehicle/body?door_rl=true"                          # door_fl|fr|rl|rr
+hb; curl -X PUT "http://127.0.0.1:8088/vehicle/gear?gear=D"
+hb; curl -X PUT "http://127.0.0.1:8088/vehicle/telltales/simulator?color=Yellow&state=On&type=PassengerAirbagOff"
+curl -s http://127.0.0.1:8088/vehicle/state      # 전체 상태
+curl -s http://127.0.0.1:8088/vehicle/catalog    # 조작 가능한 항목·엔드포인트 목록
 ```
 
-### Virtual Console을 스크립트로 조작하기
-
-- Console은 **브라우저 세션 heartbeat가 있어야 차량 값을 받는다**. 세션이 없으면 `503 {"error":"emulator_inactive"}`가 돌아온다.
-- 스크립트로 조작할 때는 쓰기 직전에 heartbeat를 보낸다.
-- WSL에서는 Windows `curl.exe`를 쓴다. adb forward가 Windows의 127.0.0.1에 바인딩되기 때문이다.
-
-```bash
-C=/mnt/c/Windows/System32/curl.exe
-hb(){ "$C" -s -X POST "http://127.0.0.1:8088/browser/session?client=probe-cli" >/dev/null; }
-hb; "$C" -X PUT "http://127.0.0.1:8088/vehicle/telltales/simulator?color=Red&state=On&type=TPMS"
-hb; "$C" -X PUT "http://127.0.0.1:8088/vehicle/seat?kind=occupied&value=true&area=driver"   # driver|passenger|rear_left|rear_right
-hb; "$C" -X PUT "http://127.0.0.1:8088/vehicle/body?door_rl=true"                          # door_fl|fr|rl|rr
-"$C" -s http://127.0.0.1:8088/vehicle/state      # 전체 상태
-"$C" -s http://127.0.0.1:8088/vehicle/catalog    # 조작 가능한 항목·엔드포인트 목록
-```
-
-경고등 type 값: ParkingBrake, ElectronicParkingBrake, SeatBelt, DoorOpen, ABS, MDPS, TPMS, LowVoltBattery, ESC, ESCOff, Airbag, AFS, MasterWarning, AutoHold, AutoHighBeam, HeadlampLow, HeadlampHigh, PositionLamp, FrontFogLamp, RearFogLamp, EngineOilPressure, EngineTemperature, EmergencyCall, EVSystem, PowerDown, RBS, Immobilizer, Engine, LEDHeadlamp, Preheat, ParticleFilter, H2Sensor, H2Leak, PassengerAirbagOff, PassengerAirbagOn, TurnSignalLeft, TurnSignalRight
-
-- 이 목록은 SDK의 `TelltaleType`(약 90종)보다 작다.
-- 운전자 주의(DRIVER_ATTENTION)나 ADAS 계열 경고등은 Console에서 켤 수 없다.
+Console에서 켤 수 있는 경고등은 SDK의 `TelltaleType`(약 90종)보다 적습니다. 운전자 주의(DRIVER_ATTENTION)나 ADAS 계열은 켤 수 없습니다.
